@@ -1,76 +1,66 @@
 #!/usr/bin/env bash
+# Pins every GitHub Action in this repo's workflows and in the template's
+# workflows to the commit SHA of its latest release, with the tag as a
+# comment:
+#
+#   uses: actions/checkout@<sha> # v7.0.1
+#
+# Generated projects then start pinned, and their Renovate config keeps the
+# pins current. This script exists because Renovate cannot parse the
+# template's workflow files, which contain scaffold [[ ]] blocks.
 set -euo pipefail
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-WORKFLOWS_DIR="$REPO_ROOT/{{ .ProjectKebab }}/.github/workflows"
 
 if ! command -v gh &>/dev/null; then
 	echo "error: gh CLI is required"
 	exit 1
 fi
 
-# Extract unique action references (org/repo@vN) from all workflow files
-declare -A actions
-while IFS= read -r line; do
-	# Match "uses: org/repo@vN" patterns, skip local references (./)
-	if [[ "$line" =~ uses:\ +([a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+)@v([0-9]+) ]]; then
-		repo="${BASH_REMATCH[1]}"
-		current="v${BASH_REMATCH[2]}"
-		actions["$repo"]="$current"
-	fi
-done < <(cat "$WORKFLOWS_DIR"/*.yml)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "Checking ${#actions[@]} actions for updates..."
-echo ""
+python3 - "$REPO_ROOT/.github/workflows" "$REPO_ROOT/{{ .ProjectKebab }}/.github/workflows" <<'PY'
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
 
-updated=0
-for repo in "${!actions[@]}"; do
-	current="${actions[$repo]}"
+USES = re.compile(r"(uses:\s+)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)(\s+#\s*\S+)?")
 
-	# Get the latest release tag from GitHub
-	latest_tag=$(gh api "repos/$repo/releases/latest" --jq '.tag_name' 2>/dev/null || echo "")
 
-	if [ -z "$latest_tag" ]; then
-		# Some actions don't use releases, try tags instead
-		latest_tag=$(gh api "repos/$repo/tags?per_page=1" --jq '.[0].name' 2>/dev/null || echo "")
-	fi
+def gh(path):
+    result = subprocess.run(["gh", "api", path], check=True, capture_output=True, text=True)
+    return json.loads(result.stdout)
 
-	if [ -z "$latest_tag" ]; then
-		echo "  SKIP  $repo@$current (could not determine latest version)"
-		continue
-	fi
 
-	# Extract major version from latest tag (e.g., v6.2.1 -> v6)
-	if [[ "$latest_tag" =~ ^v([0-9]+) ]]; then
-		latest="v${BASH_REMATCH[1]}"
-	else
-		echo "  SKIP  $repo@$current (unexpected tag format: $latest_tag)"
-		continue
-	fi
+def latest(repo):
+    """Returns (tag, commit sha) for the repo's latest release, or its newest tag."""
+    try:
+        tag = gh(f"repos/{repo}/releases/latest")["tag_name"]
+    except subprocess.CalledProcessError:
+        tag = gh(f"repos/{repo}/tags?per_page=1")[0]["name"]
+    ref = gh(f"repos/{repo}/git/ref/tags/{tag}")["object"]
+    # Annotated tags point at a tag object; follow it to the commit.
+    while ref["type"] == "tag":
+        ref = gh(f"repos/{repo}/git/tags/{ref['sha']}")["object"]
+    return tag, ref["sha"]
 
-	if [ "$current" = "$latest" ]; then
-		echo "  OK    $repo@$current (latest: $latest_tag)"
-	else
-		echo "  UPDATE $repo@$current -> $latest (latest: $latest_tag)"
 
-		# Replace all occurrences across workflow files
-		for file in "$WORKFLOWS_DIR"/*.yml; do
-			if [[ "$OSTYPE" == "darwin"* ]]; then
-				sed -i '' "s|$repo@$current|$repo@$latest|g" "$file"
-			else
-				sed -i "s|$repo@$current|$repo@$latest|g" "$file"
-			fi
-		done
+files = [f for d in sys.argv[1:] for f in sorted(Path(d).glob("*.yml"))]
+repos = sorted({m.group(2) for f in files for m in USES.finditer(f.read_text())})
 
-		updated=$((updated + 1))
-	fi
-done
+pins = {}
+for repo in repos:
+    pins[repo] = latest(repo)
+    print(f"  {repo}@{pins[repo][1]} # {pins[repo][0]}")
+
+for f in files:
+    text = f.read_text()
+    new = USES.sub(lambda m: f"{m.group(1)}{m.group(2)}@{pins[m.group(2)][1]} # {pins[m.group(2)][0]}", text)
+    if new != text:
+        f.write_text(new)
+        print(f"updated {f}")
+PY
 
 echo ""
-if [ "$updated" -gt 0 ]; then
-	echo "Updated $updated action(s)."
-	echo "Run 'mise run test:snapshot:update' to regenerate the snapshot."
-else
-	echo "All actions are up to date."
-fi
+echo "Run 'mise run test:snapshot:update' to regenerate the snapshot."

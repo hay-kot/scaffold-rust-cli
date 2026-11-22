@@ -2,6 +2,7 @@
 # Bumps the template to current dependency releases:
 #   - crate requirements in Cargo.toml move to the latest major (or 0.x minor)
 #   - rust-toolchain.toml and `rust-version` move to the latest stable Rust
+#   - dev tool pins in the template mise.toml move to their latest release
 # Requirements name only the major ("1", "0.3"), so minor and patch releases
 # need no change here; the generated project's Cargo.lock picks them up.
 set -euo pipefail
@@ -12,6 +13,7 @@ TEMPLATE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/{{ .ProjectKebab }}"
 python3 - "$TEMPLATE_DIR" <<'PY'
 import json
 import re
+import subprocess
 import sys
 import urllib.request
 from pathlib import Path
@@ -71,6 +73,24 @@ if new_toolchain != toolchain_text:
     changed += 1
 else:
     print(f"  OK     rust toolchain {rust}")
+
+mise_toml = template / "mise.toml"
+mise_text = mise_toml.read_text()
+tool_line = re.compile(r'^("?)([^"=\s]+)\1 = "([^"]+)"$', re.M)
+in_tools = mise_text.split("[tools]", 1)[1].split("\n[", 1)[0]
+for match in tool_line.finditer(in_tools):
+    tool, current = match.group(2), match.group(3)
+    latest = subprocess.run(
+        ["mise", "latest", tool], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    if latest and latest != current:
+        print(f"  UPDATE {tool} {current} -> {latest}")
+        old_line = match.group(0)
+        mise_text = mise_text.replace(old_line, old_line.replace(f'"{current}"', f'"{latest}"'), 1)
+        changed += 1
+    else:
+        print(f"  OK     {tool} {current}")
+mise_toml.write_text(mise_text)
 
 print(f"\n{changed} update(s).")
 PY

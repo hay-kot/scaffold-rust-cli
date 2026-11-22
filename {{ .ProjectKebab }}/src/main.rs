@@ -78,24 +78,15 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     }
 }
 
-/// Writes `err` and its causes to stderr in a box, colored when `color` is set.
+/// Writes `err` and its causes to stderr as `error: <message>: <cause>`.
 fn report(err: &anyhow::Error, color: bool) {
     // Nothing useful remains to do if stderr itself is gone.
     let _ignored = write_report(&mut io::stderr().lock(), err, color);
 }
 
 fn write_report(out: &mut impl io::Write, err: &anyhow::Error, color: bool) -> io::Result<()> {
-    let (red, gray, reset) = if color {
-        ("\x1b[38;2;215;95;107m", "\x1b[38;2;163;163;163m", "\x1b[0m")
-    } else {
-        ("", "", "")
-    };
-
-    writeln!(out, "\n{red}╭ Error{reset}")?;
-    for line in format!("{err:#}").lines() {
-        writeln!(out, "{red}│{reset} {gray}{line}{reset}")?;
-    }
-    writeln!(out, "{red}╵{reset}")
+    let (red, reset) = if color { ("\x1b[1;31m", "\x1b[0m") } else { ("", "") };
+    writeln!(out, "{red}error:{reset} {err:#}")
 }
 
 #[cfg(test)]
@@ -103,15 +94,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn report_boxes_every_line_of_the_error() {
-        let err = anyhow::anyhow!("first line\nsecond line").context("loading config");
+    fn report_prints_the_error_and_its_causes() {
+        let err = anyhow::anyhow!("file not found").context("loading config");
         let mut out = Vec::new();
         write_report(&mut out, &err, false).unwrap();
-        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @r"
-        ╭ Error
-        │ loading config: first line
-        │ second line
-        ╵
-        ");
+        insta::assert_snapshot!(
+            String::from_utf8(out).unwrap(),
+            @"error: loading config: file not found"
+        );
     }
 }

@@ -110,13 +110,13 @@ cli-test:  (type=dir)
 				  Rust:
 				    runs-on: ubuntu-latest
 				    steps:
-				      - uses: actions/checkout@v7
+				      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 				
 				      - name: Install tools
-				        uses: jdx/mise-action@v5
+				        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
 				
 				      - name: Cache cargo
-				        uses: Swatinem/rust-cache@v2
+				        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 				
 				      - name: Check
 				        run: mise run check
@@ -168,18 +168,18 @@ cli-test:  (type=dir)
 				    needs:
 				      - backend-tests
 				    steps:
-				      - uses: actions/checkout@v7
+				      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 				
-				      - uses: actions-ecosystem/action-get-latest-tag@v1
+				      - uses: actions-ecosystem/action-get-latest-tag@b7c32daec3395a9616f88548363a42652b22d435 # v1.6.0
 				        id: get-latest-tag
 				
-				      - uses: actions-ecosystem/action-bump-semver@v1
+				      - uses: actions-ecosystem/action-bump-semver@34e334551143a5301f38c830e44a22273c6ff5c5 # v1.0.0
 				        id: bump-semver
 				        with:
 				          current_version: ${{ steps.get-latest-tag.outputs.tag }}
 				          level: ${{ inputs.semverbump }}
 				
-				      - uses: actions-ecosystem/action-push-tag@v1
+				      - uses: actions-ecosystem/action-push-tag@6e82caefe706f5a729e354df7443dc82f98a414f # v1.0.0
 				        with:
 				          tag: ${{ steps.bump-semver.outputs.new_version }}
 				          message: "${{ steps.bump-semver.outputs.new_version }}"
@@ -191,20 +191,20 @@ cli-test:  (type=dir)
 				      - tag
 				    runs-on: ubuntu-latest
 				    steps:
-				      - uses: actions/checkout@v7
+				      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 				        with:
 				          fetch-depth: 0
 				      - run: git fetch --force --tags
 				
 				      - name: Install tools
-				        uses: jdx/mise-action@v5
+				        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
 				
 				      - name: Cache cargo
-				        uses: Swatinem/rust-cache@v2
+				        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
 				
-				      - uses: docker/setup-buildx-action@v4
+				      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 				
-				      - uses: docker/login-action@v4
+				      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
 				        with:
 				          registry: ghcr.io
 				          username: ${{ github.actor }}
@@ -670,6 +670,15 @@ cli-test:  (type=dir)
 		- CLI tests in `tests/cli.rs` run the built binary with [assert_cmd](https://docs.rs/assert_cmd).
 		- [insta](https://insta.rs) is included so snapshot tests are easy to add later. Today it backs only the small inline snapshots in the command tests. It earns its place on large outputs such as help text, JSON, or rendered files. When output changes on purpose, run `cargo insta review` to accept the new snapshot instead of editing the expected text by hand.
 		
+		### Dependencies
+		
+		[Renovate](https://docs.renovatebot.com) keeps dependencies current (install the Renovate GitHub app on the repository to turn it on). `renovate.json` sets these rules:
+		
+		- Crates: `Cargo.toml` names only major versions, so minor and patch updates change only `Cargo.lock`. One weekly PR groups them, and a weekly lockfile refresh picks up transitive updates.
+		- The Rust toolchain in `rust-toolchain.toml`, the dev tools in `mise.toml`, and GitHub Actions each get grouped non-major PRs.
+		- GitHub Actions are pinned to commit SHAs with the release tag as a comment.
+		- Updates wait 7 days after a release. Security fixes from OSV advisories (which include RustSec) skip the wait and the schedule.
+		
 		### Adding a command
 		
 		```sh
@@ -748,16 +757,17 @@ cli-test:  (type=dir)
 		allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 		
 	mise.toml:  (type=file)
-		# Rust itself comes from rustup, pinned by rust-toolchain.toml.
+		# Rust itself comes from rustup, pinned by rust-toolchain.toml. Renovate
+		# updates these pins.
 		[tools]
-		cargo-deny = "latest"
-		"github:Boshen/cargo-shear" = "latest"
-		"github:rust-cross/cargo-zigbuild" = "latest"
-		"github:taiki-e/cargo-llvm-cov" = "latest"
-		cargo-insta = "latest"
-		goreleaser = "latest"
-		typos = "latest"
-		zig = "0.14"
+		cargo-deny = "0.22.0"
+		cargo-insta = "1.49.0"
+		"github:Boshen/cargo-shear" = "1.14.1"
+		"github:rust-cross/cargo-zigbuild" = "0.24.1"
+		"github:taiki-e/cargo-llvm-cov" = "0.9.1"
+		goreleaser = "2.20.2"
+		typos = "1.52.2"
+		zig = "0.17.1"
 		
 		[env]
 		LOG_LEVEL = "debug"
@@ -822,14 +832,44 @@ cli-test:  (type=dir)
 	renovate.json:  (type=file)
 		{
 		  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-		  "extends": ["config:recommended"],
+		  "extends": ["config:recommended", "helpers:pinGitHubActionDigestsToSemver"],
+		  "labels": ["dependencies"],
+		  "schedule": ["before 6am on monday"],
+		  "minimumReleaseAge": "7 days",
+		  "internalChecksFilter": "strict",
+		  "osvVulnerabilityAlerts": true,
+		  "vulnerabilityAlerts": {
+		    "labels": ["security"],
+		    "minimumReleaseAge": null,
+		    "schedule": ["at any time"]
+		  },
 		  "lockFileMaintenance": {
-		    "enabled": true
+		    "enabled": true,
+		    "schedule": ["before 6am on monday"]
 		  },
 		  "packageRules": [
 		    {
+		      "description": "Cargo.toml names only the major version, so in-range updates change only Cargo.lock.",
 		      "matchManagers": ["cargo"],
-		      "rangeStrategy": "bump"
+		      "rangeStrategy": "update-lockfile"
+		    },
+		    {
+		      "description": "One PR for all non-major crate updates.",
+		      "matchManagers": ["cargo"],
+		      "matchUpdateTypes": ["minor", "patch"],
+		      "groupName": "rust crates (non-major)"
+		    },
+		    {
+		      "description": "One PR for all non-major GitHub Action and digest updates.",
+		      "matchManagers": ["github-actions"],
+		      "matchUpdateTypes": ["minor", "patch", "digest", "pinDigest"],
+		      "groupName": "github actions (non-major)"
+		    },
+		    {
+		      "description": "One PR for all non-major dev tool updates in mise.toml.",
+		      "matchManagers": ["mise"],
+		      "matchUpdateTypes": ["minor", "patch"],
+		      "groupName": "dev tools (non-major)"
 		    }
 		  ]
 		}
@@ -1129,24 +1169,15 @@ cli-test:  (type=dir)
 			    }
 			}
 			
-			/// Writes `err` and its causes to stderr in a box, colored when `color` is set.
+			/// Writes `err` and its causes to stderr as `error: <message>: <cause>`.
 			fn report(err: &anyhow::Error, color: bool) {
 			    // Nothing useful remains to do if stderr itself is gone.
 			    let _ignored = write_report(&mut io::stderr().lock(), err, color);
 			}
 			
 			fn write_report(out: &mut impl io::Write, err: &anyhow::Error, color: bool) -> io::Result<()> {
-			    let (red, gray, reset) = if color {
-			        ("\x1b[38;2;215;95;107m", "\x1b[38;2;163;163;163m", "\x1b[0m")
-			    } else {
-			        ("", "", "")
-			    };
-			
-			    writeln!(out, "\n{red}╭ Error{reset}")?;
-			    for line in format!("{err:#}").lines() {
-			        writeln!(out, "{red}│{reset} {gray}{line}{reset}")?;
-			    }
-			    writeln!(out, "{red}╵{reset}")
+			    let (red, reset) = if color { ("\x1b[1;31m", "\x1b[0m") } else { ("", "") };
+			    writeln!(out, "{red}error:{reset} {err:#}")
 			}
 			
 			#[cfg(test)]
@@ -1154,16 +1185,14 @@ cli-test:  (type=dir)
 			    use super::*;
 			
 			    #[test]
-			    fn report_boxes_every_line_of_the_error() {
-			        let err = anyhow::anyhow!("first line\nsecond line").context("loading config");
+			    fn report_prints_the_error_and_its_causes() {
+			        let err = anyhow::anyhow!("file not found").context("loading config");
 			        let mut out = Vec::new();
 			        write_report(&mut out, &err, false).unwrap();
-			        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @r"
-			        ╭ Error
-			        │ loading config: first line
-			        │ second line
-			        ╵
-			        ");
+			        insta::assert_snapshot!(
+			            String::from_utf8(out).unwrap(),
+			            @"error: loading config: file not found"
+			        );
 			    }
 			}
 			

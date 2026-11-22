@@ -76,6 +76,21 @@ mise tasks         # list all tasks
 - CLI tests in `tests/cli.rs` run the built binary with [assert_cmd](https://docs.rs/assert_cmd).
 - [insta](https://insta.rs) is included so snapshot tests are easy to add later. Today it backs only the small inline snapshots in the command tests. It earns its place on large outputs such as help text, JSON, or rendered files. When output changes on purpose, run `cargo insta review` to accept the new snapshot instead of editing the expected text by hand.
 
+### Dependencies
+
+{{- if .Computed.feature_renovate }}
+
+[Renovate](https://docs.renovatebot.com) keeps dependencies current (install the Renovate GitHub app on the repository to turn it on). `renovate.json` sets these rules:
+
+- Crates: `Cargo.toml` names only major versions, so minor and patch updates change only `Cargo.lock`. One weekly PR groups them, and a weekly lockfile refresh picks up transitive updates.
+- The Rust toolchain in `rust-toolchain.toml`, the dev tools in `mise.toml`, and GitHub Actions each get grouped non-major PRs.
+- GitHub Actions are pinned to commit SHAs with the release tag as a comment.
+- Updates wait 7 days after a release. Security fixes from OSV advisories (which include RustSec) skip the wait and the schedule.
+{{- else }}
+
+Run `cargo update` for compatible crate updates. `cargo deny check` reports security advisories.
+{{- end }}
+
 ### Adding a command
 
 ```sh

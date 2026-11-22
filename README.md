@@ -28,7 +28,8 @@ The post-scaffold hook runs `cargo generate-lockfile` and `cargo fmt`, so it nee
 - Issue and PR templates
 - PR checks through `mise run check`
 - Manual release workflow with a semver bump
-- Renovate configuration for cargo, mise and GitHub Actions
+- GitHub Actions pinned to commit SHAs, with the release tag as a comment
+- Renovate for crates, `Cargo.lock`, the Rust toolchain, mise tools and GitHub Actions. It waits 7 days after a release, groups non-major updates, and uses OSV advisories (which include RustSec).
 
 ## Developing the template
 
@@ -40,4 +41,4 @@ mise run test:run               # render each preset, run its full checks and it
 
 The `test` preset uses the default features. The `full` preset turns on every CLI feature. Both must pass `mise run check` after rendering.
 
-A weekly workflow bumps crate majors, Rust stable and GitHub Action majors (`mise run update:deps`, `mise run update:actions`), then opens a PR.
+A weekly workflow bumps crate majors, Rust stable and the mise tool pins (`mise run update:deps`), pins GitHub Actions to the latest release SHAs (`mise run update:actions`), then opens a PR. These are scripts and not Renovate because Renovate cannot parse the template files, which contain scaffold blocks.

@@ -1,13 +1,14 @@
-# Rust itself comes from rustup, pinned by rust-toolchain.toml.
+# Rust itself comes from rustup, pinned by rust-toolchain.toml. Renovate
+# updates these pins.
 [tools]
-cargo-deny = "latest"
-"github:Boshen/cargo-shear" = "latest"
-"github:rust-cross/cargo-zigbuild" = "latest"
-"github:taiki-e/cargo-llvm-cov" = "latest"
-cargo-insta = "latest"
-goreleaser = "latest"
-typos = "latest"
-zig = "0.14"
+cargo-deny = "0.22.0"
+cargo-insta = "1.49.0"
+"github:Boshen/cargo-shear" = "1.14.1"
+"github:rust-cross/cargo-zigbuild" = "0.24.1"
+"github:taiki-e/cargo-llvm-cov" = "0.9.1"
+goreleaser = "2.20.2"
+typos = "1.52.2"
+zig = "0.17.1"
 
 [env]
 LOG_LEVEL = "debug"
