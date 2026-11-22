@@ -164,6 +164,34 @@ presets:
     commands:
       - "hello"
       - "say-goodbye"
+  config:
+    Project: "cli-config"
+    repository: "github.com/username/cli-config"
+    full_name: "John Doe"
+    description: "A new project with a config file and JSON output"
+    open_source_license: "GNU General Public License v3"
+    features_cicd:
+      - "Github Actions"
+    features_publishing:
+      - "Docker"
+    features_cli:
+      - "Config File"
+      - "JSON Output"
+    docker_registry_url: ghcr.io/hay-kot/scaffold-rust-cli
+    commands:
+      - "hello"
+  logging:
+    Project: "cli-logging"
+    repository: "github.com/username/cli-logging"
+    full_name: "John Doe"
+    description: "A new project with file logging"
+    open_source_license: "ISC license"
+    features_cicd: []
+    features_publishing: []
+    features_cli:
+      - "File Logging"
+    commands:
+      - "hello"
   full:
     Project: "cli-full"
     repository: "github.com/username/cli-full"

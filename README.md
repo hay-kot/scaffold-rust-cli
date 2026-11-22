@@ -39,6 +39,6 @@ mise run test:snapshot:update   # accept the current rendering
 mise run test:run               # render each preset, run its full checks and its first command
 ```
 
-The `test` preset uses the default features. The `full` preset turns on every CLI feature. Both must pass `mise run check` after rendering.
+The `test` preset uses the default features, and `full` turns on every CLI feature. `config` (config file and JSON output) and `logging` (file logging only) cover feature combinations that the other two miss. Every preset must pass `mise run check` after rendering.
 
 A weekly workflow bumps crate majors, Rust stable and the mise tool pins (`mise run update:deps`), pins GitHub Actions to the latest release SHAs (`mise run update:actions`), then opens a PR. These are scripts and not Renovate because Renovate cannot parse the template files, which contain scaffold blocks.
