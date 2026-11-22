@@ -1,0 +1,71 @@
+# Rust itself comes from rustup, pinned by rust-toolchain.toml. Renovate
+# updates these pins.
+[tools]
+cargo-deny = "0.22.0"
+cargo-insta = "1.49.0"
+"github:Boshen/cargo-shear" = "1.14.1"
+"github:rust-cross/cargo-zigbuild" = "0.24.1"
+"github:taiki-e/cargo-llvm-cov" = "0.9.1"
+goreleaser = "2.20.2"
+typos = "1.52.2"
+zig = "0.17.1"
+
+[env]
+LOG_LEVEL = "debug"
+
+[tasks.run]
+description = "Run the main application"
+run = "cargo run --"
+
+[tasks.build]
+description = "Build a release binary for this machine with goreleaser"
+run = "goreleaser build --snapshot --clean --single-target"
+
+[tasks.test]
+description = "Run all tests"
+run = "cargo test --locked"
+
+[tasks.coverage]
+description = "Run tests with coverage and write lcov.info"
+run = "cargo llvm-cov --locked --lcov --output-path lcov.info"
+
+[tasks.fmt]
+description = "Format code"
+run = "cargo fmt --all"
+
+[tasks."fmt:check"]
+description = "Check formatting"
+run = "cargo fmt --all --check"
+
+[tasks.lint]
+description = "Run clippy with warnings as errors"
+run = "cargo clippy --locked --all-targets -- -D warnings"
+
+[tasks.docs]
+description = "Build docs with warnings as errors"
+run = "cargo doc --locked --no-deps --document-private-items"
+env = { RUSTDOCFLAGS = "-D warnings" }
+
+[tasks.deny]
+description = "Check dependencies for advisories, licenses and sources"
+run = "cargo deny --locked check"
+
+[tasks.tidy]
+description = "Find unused dependencies"
+run = "cargo shear"
+
+[tasks.typos]
+description = "Check spelling"
+run = "typos"
+
+[tasks.check]
+description = "Run all checks for PRs (fmt, lint, test, docs, deny, tidy, typos)"
+run = [
+    { task = "fmt:check" },
+    { task = "lint" },
+    { task = "test" },
+    { task = "docs" },
+    { task = "deny" },
+    { task = "tidy" },
+    { task = "typos" },
+]

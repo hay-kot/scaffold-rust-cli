@@ -1,0 +1,37 @@
+[tools]
+"github:hay-kot/scaffold" = "latest"
+
+[tasks.snapshot]
+description = "Print the rendered test preset as a snapshot"
+run = 'scaffold new --output-dir=":memory:" --preset="test" --no-prompt --snapshot="stdout" ./'
+
+[tasks."test:snapshot"]
+description = "Fail if the rendered test preset differs from snapshots/test.snapshot"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+date_re='[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}'
+diff -u \
+  <(sed "s/$date_re/DATE/g" snapshots/test.snapshot) \
+  <(scaffold new --output-dir=":memory:" --preset="test" --no-prompt --snapshot="stdout" ./ | sed "s/$date_re/DATE/g")
+'''
+
+[tasks."test:snapshot:update"]
+description = "Rewrite snapshots/test.snapshot from the current template"
+run = 'scaffold new --output-dir=":memory:" --preset="test" --no-prompt --snapshot="stdout" ./ > snapshots/test.snapshot'
+
+[tasks."test:run"]
+description = "Render each preset, run its checks, and run its first command"
+run = "scripts/test-run.sh"
+
+[tasks.test]
+description = "Run the snapshot test, then the render-and-run test"
+run = [{ task = "test:snapshot" }, { task = "test:run" }]
+
+[tasks."update:deps"]
+description = "Bump crate majors and the Rust toolchain in the template"
+run = "scripts/update-deps.sh"
+
+[tasks."update:actions"]
+description = "Bump GitHub Action majors in the template workflows"
+run = "scripts/update-actions.sh"

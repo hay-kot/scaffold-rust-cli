@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://hay-kot.github.io/scaffold/schema.json
+questions:
+  - name: "command_name"
+    prompt:
+      message: "Command Name"
+      description: "kebab-case command name"
+    validate:
+      required: true
+      match:
+        regex: "^[a-z]+(-[a-z]+)*$"
+        message: "must be kebab-case"
+
+rewrites:
+  - from: templates/src/commands/command.rs
+    to: "src/commands/{{ "{{ .Scaffold.command_name | toSnakeCase }}" }}.rs"
+
+inject:
+  - name: "declare module"
+    path: src/commands.rs
+    at: "// +scaffold:command:module"
+    mode: before
+    template: |
+      pub(crate) mod {{ "{{ .Scaffold.command_name | toSnakeCase }}" }};
+  - name: "add subcommand"
+    path: src/cli.rs
+    at: "// +scaffold:command:variant"
+    mode: before
+    template: |
+      /// Run the {{ "{{ .Scaffold.command_name }}" }} command
+      {{ "{{ .Scaffold.command_name | toPascalCase }}" }}(commands::{{ "{{ .Scaffold.command_name | toSnakeCase }}" }}::Args),
+  - name: "dispatch subcommand"
+    path: src/main.rs
+    at: "// +scaffold:command:dispatch"
+    mode: before
+    template: |
+      Command::{{ "{{ .Scaffold.command_name | toPascalCase }}" }}(args) => commands::{{ "{{ .Scaffold.command_name | toSnakeCase }}" }}::run(&args, &ctx, &mut out),
+
+presets:
+  default:
+    command_name: "example"

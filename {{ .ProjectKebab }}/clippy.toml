@@ -1,0 +1,18 @@
+# Tests may unwrap, panic, index and print: a failing test should fail loudly.
+allow-dbg-in-tests = false
+allow-expect-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-panic-in-tests = true
+allow-print-in-tests = true
+allow-unwrap-in-tests = true
+
+avoid-breaking-exported-api = false
+cognitive-complexity-threshold = 15
+too-many-arguments-threshold = 5
+too-many-lines-threshold = 80
+
+disallowed-methods = [
+  { path = "std::process::exit", reason = "return an ExitCode from main so destructors run" },
+  { path = "std::env::set_var", reason = "process-wide mutation; pass configuration explicitly" },
+  { path = "std::env::remove_var", reason = "process-wide mutation; pass configuration explicitly" },
+]
