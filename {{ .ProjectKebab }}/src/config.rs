@@ -2,7 +2,11 @@
 
 use std::fs;
 use std::io::ErrorKind;
+{{- if .Computed.feature_file_logging }}
 use std::path::{Path, PathBuf};
+{{- else }}
+use std::path::Path;
+{{- end }}
 
 use anyhow::Context as _;
 use serde::Deserialize;
@@ -50,6 +54,10 @@ impl Config {
 
 #[cfg(test)]
 mod tests {
+{{- if not .Computed.feature_file_logging }}
+    use std::path::PathBuf;
+
+{{- end }}
     use super::*;
 
     fn write_config(contents: &str) -> (tempfile::TempDir, PathBuf) {

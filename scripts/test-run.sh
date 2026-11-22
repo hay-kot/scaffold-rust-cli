@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 OUT_DIR="$(mktemp -d)"
 trap 'rm -rf "$OUT_DIR"' EXIT
 
-presets="${PRESETS:-test full}"
+presets="${PRESETS:-test config logging full}"
 
 for preset in $presets; do
 	echo "==> rendering preset '$preset'"
