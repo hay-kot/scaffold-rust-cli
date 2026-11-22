@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+project_name: [[ .ProjectKebab ]]
+
+before:
+  hooks:
+    - rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
+
+builds:
+  # cargo-zigbuild cross-compiles every target from one host, with zig as the
+  # C compiler and linker. Linux builds are static musl binaries.
+  - id: [[ .ProjectKebab ]]
+    builder: rust
+    command: zigbuild
+    binary: [[ .ProjectKebab ]]
+    flags:
+      - --release
+      - --locked
+    targets:
+      - x86_64-unknown-linux-musl
+      - aarch64-unknown-linux-musl
+      - x86_64-apple-darwin
+      - aarch64-apple-darwin
+      - x86_64-pc-windows-gnu
+    env:
+      - BUILD_VERSION={{ .Version }}
+      - BUILD_COMMIT={{ .FullCommit }}
+      - BUILD_DATE={{ .Date }}
+
+archives:
+  - formats: [tar.gz]
+    # this name template makes the OS and Arch compatible with the results of uname.
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    # use zip for windows archives
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(\w+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\(\w+\))??!?:.+$'
+      order: 1
+    - title: Documentation
+      regexp: '^.*?docs(\(\w+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+[[ if .Computed.feature_homebrew_tap ]]
+homebrew_casks:
+  - repository:
+      owner: "[[ .Scaffold.homebrew_owner ]]"
+      name: "[[ .Scaffold.homebrew_name ]]"
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    description: "[[ .Scaffold.description ]]"
+    homepage: "https://[[ .Scaffold.repository ]]"
+[[ end ]]
+[[- if .Computed.feature_docker ]]
+dockers_v2:
+  - ids:
+      - [[ .ProjectKebab ]]
+    images:
+      - "[[ .Scaffold.docker_registry_url ]]"
+    tags:
+      - "v{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.created: "{{ .Date }}"
+      org.opencontainers.image.title: "{{ .ProjectName }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "v{{ .Version }}"
+[[ end ]]

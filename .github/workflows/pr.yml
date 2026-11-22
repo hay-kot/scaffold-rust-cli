@@ -1,0 +1,25 @@
+name: Run Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install tools
+        uses: jdx/mise-action@v5
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run snapshot tests
+        run: mise run test:snapshot
+
+      - name: Render each preset and run its checks
+        run: mise run test:run

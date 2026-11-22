@@ -1,0 +1,1220 @@
+cli-test:  (type=dir)
+	.github:  (type=dir)
+		ISSUE_TEMPLATE:  (type=dir)
+			bug_report.yml:  (type=file)
+				---
+				name: Bug Report
+				description: "Submit a bug for the latest version"
+				title: "YOUR DESCRIPTIVE TITLE GOES HERE"
+				labels: ["bug", "triage"]
+				body:
+				  - type: checkboxes
+				    id: checks
+				    attributes:
+				      label: First Check
+				      description: |
+				        Please confirm and check all the following prior to submission. If you do not do this, your
+				        issue may be closed.
+				      options:
+				        - label: This is not a feature request.
+				          required: true
+				        - label: I added a very descriptive title to this issue (title field is above this).
+				          required: true
+				        - label: I used the GitHub search to find a similar issue and didn't find it.
+				          required: true
+				  - type: textarea
+				    id: description
+				    attributes:
+				      label: What is the issue you are experiencing?
+				      placeholder: A clear and concise description of what the bug is.
+				    validations:
+				      required: true
+				  - type: textarea
+				    id: reproduction
+				    attributes:
+				      label: Steps to Reproduce (or failing test case)
+				      placeholder: 1) ... 2) ... 3) ...
+				    validations:
+				      required: true
+				  - type: textarea
+				    id: version
+				    attributes:
+				      label: Package Version
+				      placeholder: e.g. v0.1.1
+				
+			feature_request.yml:  (type=file)
+				name: Feature Request
+				description: "Submit a new feature request"
+				title: "YOUR DESCRIPTIVE TITLE GOES HERE"
+				labels: ["feature", "triage"]
+				body:
+				  - type: checkboxes
+				    id: checks
+				    attributes:
+				      label: First Check
+				      description: |
+				        Please confirm and check all the following prior to submission. If you do not do this, your
+				        issue may be closed.
+				      options:
+				        - label: I used the GitHub search to find a similar requests and didn't find it.
+				          required: true
+				  - type: textarea
+				    id: problem
+				    attributes:
+				      label: Please provide a concise description of the problem that would be addressed by this feature.
+				    validations:
+				      required: true
+				  - type: textarea
+				    id: solution
+				    attributes:
+				      label: Please provide a concise description of the feature that would resolve your issue.
+				    validations:
+				      required: true
+				  - type: textarea
+				    id: considerations
+				    attributes:
+				      label: Please consider and list out some caveats or tradeoffs made in your design decision
+				    validations:
+				      required: true
+				  - type: checkboxes
+				    id: additional-information
+				    attributes:
+				      label: Additional Information
+				      options:
+				        - label: If this is accepted I'm willing to submit a PR to provide this feature
+				        - label: If this is accepted I'm willing to help maintain this feature
+				
+		PULL_REQUEST_TEMPLATE.md:  (type=file)
+			Fixes #
+			
+			## Purpose
+			
+			## Proposed Changes
+			
+			  -
+			  -
+			  -
+			
+			## Checklist
+			
+			- [ ] I have added tests that prove my fix is effective or that my feature works
+			- [ ] I have added necessary documentation (if appropriate)
+		workflows:  (type=dir)
+			partial-tests.yml:  (type=file)
+				name: Rust Build/Test
+				
+				on:
+				  workflow_call:
+				
+				jobs:
+				  Rust:
+				    runs-on: ubuntu-latest
+				    steps:
+				      - uses: actions/checkout@v7
+				
+				      - name: Install tools
+				        uses: jdx/mise-action@v5
+				
+				      - name: Cache cargo
+				        uses: Swatinem/rust-cache@v2
+				
+				      - name: Check
+				        run: mise run check
+				
+			pr.yml:  (type=file)
+				name: pr
+				
+				on:
+				  push:
+				    branches:
+				      - main
+				  pull_request:
+				    branches:
+				      - main
+				
+				jobs:
+				  backend-tests:
+				    name: "Rust Build/Test"
+				    uses: ./.github/workflows/partial-tests.yml
+				
+			publish.yml:  (type=file)
+				name: Build and Publish
+				
+				permissions:
+				  contents: write # for release
+				  packages: write
+				
+				on:
+				  workflow_dispatch:
+				    inputs:
+				      semverbump:
+				        description: "Which version to bump by"
+				        required: true
+				        default: "patch"
+				        type: choice
+				        options:
+				          - patch
+				          - minor
+				          - major
+				
+				jobs:
+				  backend-tests:
+				    name: "Rust Build/Test"
+				    uses: ./.github/workflows/partial-tests.yml
+				
+				  tag:
+				    name: "Publish Tag"
+				    runs-on: ubuntu-latest
+				    needs:
+				      - backend-tests
+				    steps:
+				      - uses: actions/checkout@v7
+				
+				      - uses: actions-ecosystem/action-get-latest-tag@v1
+				        id: get-latest-tag
+				
+				      - uses: actions-ecosystem/action-bump-semver@v1
+				        id: bump-semver
+				        with:
+				          current_version: ${{ steps.get-latest-tag.outputs.tag }}
+				          level: ${{ inputs.semverbump }}
+				
+				      - uses: actions-ecosystem/action-push-tag@v1
+				        with:
+				          tag: ${{ steps.bump-semver.outputs.new_version }}
+				          message: "${{ steps.bump-semver.outputs.new_version }}"
+				
+				  goreleaser:
+				    name: "Release"
+				    needs:
+				      - backend-tests
+				      - tag
+				    runs-on: ubuntu-latest
+				    steps:
+				      - uses: actions/checkout@v7
+				        with:
+				          fetch-depth: 0
+				      - run: git fetch --force --tags
+				
+				      - name: Install tools
+				        uses: jdx/mise-action@v5
+				
+				      - name: Cache cargo
+				        uses: Swatinem/rust-cache@v2
+				
+				      - uses: docker/setup-buildx-action@v4
+				
+				      - uses: docker/login-action@v4
+				        with:
+				          registry: ghcr.io
+				          username: ${{ github.actor }}
+				          password: ${{ secrets.GITHUB_TOKEN }}
+				
+				      - name: Release
+				        run: goreleaser release --clean
+				        env:
+				          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+				          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+				
+	.gitignore:  (type=file)
+		/target
+		/dist
+		*.profraw
+		lcov.info
+		*.snap.new
+		*.pending-snap
+		
+	.goreleaser.yml:  (type=file)
+		# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+		version: 2
+		project_name: cli-test
+		
+		before:
+		  hooks:
+		    - rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu
+		
+		builds:
+		  # cargo-zigbuild cross-compiles every target from one host, with zig as the
+		  # C compiler and linker. Linux builds are static musl binaries.
+		  - id: cli-test
+		    builder: rust
+		    command: zigbuild
+		    binary: cli-test
+		    flags:
+		      - --release
+		      - --locked
+		    targets:
+		      - x86_64-unknown-linux-musl
+		      - aarch64-unknown-linux-musl
+		      - x86_64-apple-darwin
+		      - aarch64-apple-darwin
+		      - x86_64-pc-windows-gnu
+		    env:
+		      - BUILD_VERSION={{ .Version }}
+		      - BUILD_COMMIT={{ .FullCommit }}
+		      - BUILD_DATE={{ .Date }}
+		
+		archives:
+		  - formats: [tar.gz]
+		    # this name template makes the OS and Arch compatible with the results of uname.
+		    name_template: >-
+		      {{ .ProjectName }}_
+		      {{- title .Os }}_
+		      {{- if eq .Arch "amd64" }}x86_64
+		      {{- else if eq .Arch "386" }}i386
+		      {{- else }}{{ .Arch }}{{ end }}
+		    # use zip for windows archives
+		    format_overrides:
+		      - goos: windows
+		        formats: [zip]
+		
+		checksum:
+		  name_template: "checksums.txt"
+		
+		snapshot:
+		  version_template: "{{ incpatch .Version }}-next"
+		
+		changelog:
+		  sort: asc
+		  groups:
+		    - title: Features
+		      regexp: '^.*?feat(\(\w+\))??!?:.+$'
+		      order: 0
+		    - title: Bug Fixes
+		      regexp: '^.*?fix(\(\w+\))??!?:.+$'
+		      order: 1
+		    - title: Documentation
+		      regexp: '^.*?docs(\(\w+\))??!?:.+$'
+		      order: 2
+		    - title: Other
+		      order: 999
+		  filters:
+		    exclude:
+		      - "^test:"
+		      - "^chore:"
+		      - "^ci:"
+		
+		homebrew_casks:
+		  - repository:
+		      owner: "hay-kot"
+		      name: "homebrew-scaffold-rust-cli-tap"
+		      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+		    description: "A new project"
+		    homepage: "https://github.com/username/cli-test"
+		
+		dockers_v2:
+		  - ids:
+		      - cli-test
+		    images:
+		      - "ghcr.io/hay-kot/scaffold-rust-cli"
+		    tags:
+		      - "v{{ .Version }}"
+		      - "latest"
+		    platforms:
+		      - linux/amd64
+		      - linux/arm64
+		    labels:
+		      org.opencontainers.image.created: "{{ .Date }}"
+		      org.opencontainers.image.title: "{{ .ProjectName }}"
+		      org.opencontainers.image.revision: "{{ .FullCommit }}"
+		      org.opencontainers.image.version: "v{{ .Version }}"
+		
+		
+	.scaffold:  (type=dir)
+		command:  (type=dir)
+			hooks:  (type=dir)
+				post_scaffold.sh:  (type=file)
+					#!/usr/bin/env bash
+					# rustfmt sorts the injected `mod` declaration into place.
+					set -euo pipefail
+					cargo fmt --all
+					
+			scaffold.yaml:  (type=file)
+				# yaml-language-server: $schema=https://hay-kot.github.io/scaffold/schema.json
+				questions:
+				  - name: "command_name"
+				    prompt:
+				      message: "Command Name"
+				      description: "kebab-case command name"
+				    validate:
+				      required: true
+				      match:
+				        regex: "^[a-z]+(-[a-z]+)*$"
+				        message: "must be kebab-case"
+				
+				rewrites:
+				  - from: templates/src/commands/command.rs
+				    to: "src/commands/{{ .Scaffold.command_name | toSnakeCase }}.rs"
+				
+				inject:
+				  - name: "declare module"
+				    path: src/commands.rs
+				    at: "// +scaffold:command:module"
+				    mode: before
+				    template: |
+				      pub(crate) mod {{ .Scaffold.command_name | toSnakeCase }};
+				  - name: "add subcommand"
+				    path: src/cli.rs
+				    at: "// +scaffold:command:variant"
+				    mode: before
+				    template: |
+				      /// Run the {{ .Scaffold.command_name }} command
+				      {{ .Scaffold.command_name | toPascalCase }}(commands::{{ .Scaffold.command_name | toSnakeCase }}::Args),
+				  - name: "dispatch subcommand"
+				    path: src/main.rs
+				    at: "// +scaffold:command:dispatch"
+				    mode: before
+				    template: |
+				      Command::{{ .Scaffold.command_name | toPascalCase }}(args) => commands::{{ .Scaffold.command_name | toSnakeCase }}::run(&args, &ctx, &mut out),
+				
+				presets:
+				  default:
+				    command_name: "example"
+				
+			templates:  (type=dir)
+				src:  (type=dir)
+					commands:  (type=dir)
+						command.rs:  (type=file)
+							//! The `{{ .Scaffold.command_name }}` command.
+							
+							use std::io::Write;
+							
+							use super::Context;
+							
+							#[derive(Debug, clap::Args)]
+							pub(crate) struct Args;
+							
+							pub(crate) fn run(_args: &Args, _ctx: &Context, out: &mut impl Write) -> anyhow::Result<()> {
+							    tracing::info!("running {{ .Scaffold.command_name }} command");
+							
+							    writeln!(out, "Hello World!")?;
+							    Ok(())
+							}
+							
+							#[cfg(test)]
+							mod tests {
+							    use super::*;
+							
+							    #[test]
+							    fn prints_greeting() {
+							        let mut out = Vec::new();
+							        run(&Args, &Context::default(), &mut out).unwrap();
+							        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @"Hello World!");
+							    }
+							}
+							
+	AGENTS.md:  (type=file)
+		# AGENTS.md
+		
+		Guidance for coding agents working in this repository.
+		
+		## Before you finish
+		
+		Run `mise run check`. It is what CI runs, and it must pass: formatting, clippy with warnings as errors, tests, docs, cargo-deny, cargo-shear and typos.
+		
+		## Lints
+		
+		The lint set in `Cargo.toml` is strict on purpose. Fix the code rather than silencing the lint. When a lint is wrong for one spot, silence it there with a reason:
+		
+		```rust
+		#[expect(clippy::cast_possible_truncation, reason = "value is checked to fit in u8 above")]
+		```
+		
+		Never use `#[allow(...)]` (the `allow_attributes` lint rejects it), and never add a crate-level or `Cargo.toml` allow without asking.
+		
+		## Conventions
+		
+		- `main.rs` owns process concerns: parsing, logging setup, error reporting and the exit code. Commands never call `std::process::exit`.
+		- Commands write output to the `out: &mut impl Write` they are given, never with `println!`. Logs go to stderr through `tracing`.
+		- Library-style modules return `anyhow::Result` with context on every fallible call (`.with_context(|| ...)`). Use `thiserror` if a caller needs to match on error variants.
+		- No `unwrap`, `expect` or `panic!` outside tests.
+		- Add a command with `scaffold new command`, not by hand, so all registration points stay in sync.
+		
+		## Tests
+		
+		- Unit tests go in a `#[cfg(test)] mod tests` block in the same file. Integration tests that run the binary go in `tests/`.
+		- Every new command gets a unit test that captures its output and a CLI test in `tests/cli.rs`.
+		- Use `insta::assert_snapshot!` for multi-line or structured output, and `cargo insta review` to accept intended changes.
+		
+	CLAUDE.md:  (type=file)
+		@AGENTS.md
+		
+	Cargo.toml:  (type=file)
+		[package]
+		name = "cli-test"
+		version = "0.1.0"
+		edition = "2024"
+		rust-version = "1.100"
+		description = "A new project"
+		authors = ["John Doe"]
+		license = "MIT"
+		repository = "https://github.com/username/cli-test"
+		readme = "README.md"
+		keywords = ["cli"]
+		categories = ["command-line-utilities"]
+		# Releases ship as binaries through GoReleaser, not through crates.io.
+		publish = false
+		
+		[dependencies]
+		anyhow = "1"
+		clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
+		clap_complete = "4"
+		tracing = "0.1"
+		tracing-subscriber = "0.3"
+		
+		[dev-dependencies]
+		assert_cmd = "2"
+		insta = "1"
+		predicates = "3"
+		
+		[profile.release]
+		codegen-units = 1
+		lto = "thin"
+		strip = true
+		
+		# The lint set is strict on purpose: it keeps generated and hand-written code
+		# to the same bar. Silence a lint at the use site with
+		# `#[expect(clippy::name, reason = "...")]`, never with a blanket allow here.
+		[lints.rust]
+		unsafe_code = "forbid"
+		let_underscore_drop = "warn"
+		missing_debug_implementations = "warn"
+		rust_2018_idioms = { level = "warn", priority = -1 }
+		unreachable_pub = "warn"
+		unused_lifetimes = "warn"
+		unused_qualifications = "warn"
+		
+		[lints.clippy]
+		cargo = { level = "warn", priority = -1 }
+		nursery = { level = "warn", priority = -1 }
+		pedantic = { level = "warn", priority = -1 }
+		
+		# Transitive dependencies often pull two versions of one crate; cargo-deny
+		# reports duplicates instead.
+		multiple_crate_versions = "allow"
+		# Conflicts with rustc's `unreachable_pub`, which this crate keeps instead.
+		redundant_pub_crate = "allow"
+		
+		# Selected restriction lints.
+		allow_attributes = "warn"
+		allow_attributes_without_reason = "warn"
+		as_conversions = "warn"
+		clone_on_ref_ptr = "warn"
+		create_dir = "warn"
+		dbg_macro = "warn"
+		empty_structs_with_brackets = "warn"
+		exit = "warn"
+		expect_used = "warn"
+		filetype_is_file = "warn"
+		format_push_string = "warn"
+		get_unwrap = "warn"
+		if_then_some_else_none = "warn"
+		indexing_slicing = "warn"
+		infinite_loop = "warn"
+		let_underscore_must_use = "warn"
+		lossy_float_literal = "warn"
+		mem_forget = "warn"
+		missing_assert_message = "warn"
+		mod_module_files = "warn"
+		panic = "warn"
+		print_stderr = "warn"
+		print_stdout = "warn"
+		rc_buffer = "warn"
+		redundant_type_annotations = "warn"
+		rest_pat_in_fully_bound_structs = "warn"
+		same_name_method = "warn"
+		shadow_unrelated = "warn"
+		str_to_string = "warn"
+		string_add = "warn"
+		string_slice = "warn"
+		tests_outside_test_module = "warn"
+		todo = "warn"
+		undocumented_unsafe_blocks = "warn"
+		unimplemented = "warn"
+		unneeded_field_pattern = "warn"
+		unused_result_ok = "warn"
+		unwrap_in_result = "warn"
+		unwrap_used = "warn"
+		verbose_file_reads = "warn"
+		wildcard_enum_match_arm = "warn"
+		
+	Dockerfile:  (type=file)
+		# GoReleaser builds static musl binaries outside Docker and places them at
+		# <os>/<arch>/cli-test in the build context.
+		FROM gcr.io/distroless/static-debian12:nonroot
+		ARG TARGETPLATFORM
+		COPY ${TARGETPLATFORM}/cli-test /usr/local/bin/cli-test
+		ENTRYPOINT ["/usr/local/bin/cli-test"]
+		
+	HOMEBREW_SETUP.md:  (type=file)
+		# Homebrew Tap Setup
+		
+		This project is configured to publish to a Homebrew tap via GoReleaser. Follow these steps to set it up.
+		
+		## 1. Create the Tap Repository
+		
+		Create a new GitHub repository named `homebrew-scaffold-rust-cli-tap` under the `hay-kot` account. This repository will hold the Homebrew cask definitions that GoReleaser publishes.
+		
+		## 2. Generate a Personal Access Token (PAT)
+		
+		GoReleaser needs a PAT with write access to the tap repository (separate from `GITHUB_TOKEN` which is scoped to the source repo).
+		
+		1. Go to **GitHub Settings > Developer Settings > Personal Access Tokens > Fine-grained tokens**
+		2. Create a new token with:
+		   - **Repository access**: Select the `homebrew-scaffold-rust-cli-tap` repository
+		   - **Permissions**: Contents (Read and write)
+		3. Copy the generated token
+		
+		## 3. Add the Secret to Your Source Repository
+		
+		1. Go to your source repository **Settings > Secrets and variables > Actions**
+		2. Click **New repository secret**
+		3. Name: `HOMEBREW_TAP_GITHUB_TOKEN`
+		4. Value: Paste the PAT from the previous step
+		
+		## 4. Verify
+		
+		After the next release, GoReleaser will push a cask definition to your tap repository. Users can then install with:
+		
+		```sh
+		brew tap hay-kot/scaffold-rust-cli-tap
+		brew install cli-test
+		```
+		
+		## References
+		
+		- [GoReleaser Homebrew Casks](https://goreleaser.com/customization/homebrew_casks/)
+		
+	LICENSE:  (type=file)
+		MIT License
+		
+		Copyright (c) 2026-11-22, John Doe
+		
+		Permission is hereby granted, free of charge, to any person obtaining a copy
+		of this software and associated documentation files (the "Software"), to deal
+		in the Software without restriction, including without limitation the rights
+		to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+		copies of the Software, and to permit persons to whom the Software is
+		furnished to do so, subject to the following conditions:
+		
+		The above copyright notice and this permission notice shall be included in all
+		copies or substantial portions of the Software.
+		
+		THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+		IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+		FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+		AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+		LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+		OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+		SOFTWARE.
+		
+	README.md:  (type=file)
+		# cli-test
+		
+		A new project
+		
+		## Installation
+		
+		```sh
+		brew tap hay-kot/scaffold-rust-cli-tap
+		brew install cli-test
+		```
+		
+		Download a binary from the [releases page](https://github.com/username/cli-test/releases), or build from source:
+		
+		```sh
+		cargo install --locked --git https://github.com/username/cli-test
+		```
+		
+		## Usage
+		
+		```sh
+		cli-test --help
+		cli-test hello
+		cli-test say-goodbye
+		```
+		
+		Shell completions:
+		
+		```sh
+		cli-test completions zsh > ~/.zfunc/_cli-test
+		```
+		
+		## Development
+		
+		Tools come from [mise](https://mise.jdx.dev), and Rust comes from [rustup](https://rustup.rs) at the version in `rust-toolchain.toml`.
+		
+		```sh
+		mise install       # install the dev tools
+		mise run check     # everything CI runs
+		mise tasks         # list all tasks
+		```
+		
+		`mise run check` runs these checks, and CI runs the same task:
+		
+		| Task | Tool | What it checks |
+		|---|---|---|
+		| `fmt:check` | rustfmt | Formatting, per `rustfmt.toml` |
+		| `lint` | clippy | Lints from `[lints]` in `Cargo.toml`, with warnings as errors |
+		| `test` | cargo test | Unit tests in `src/` and CLI tests in `tests/` |
+		| `docs` | rustdoc | Doc comments build without warnings |
+		| `deny` | [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) | Security advisories, licenses and crate sources, per `deny.toml` |
+		| `tidy` | [cargo-shear](https://github.com/Boshen/cargo-shear) | Dependencies in `Cargo.toml` that the code never uses |
+		| `typos` | [typos](https://github.com/crate-ci/typos) | Spelling |
+		
+		`mise run coverage` writes an `lcov.info` coverage report with [cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov).
+		
+		### Tests
+		
+		- Unit tests live next to the code in `#[cfg(test)]` modules. Commands write to a `&mut impl Write`, so a test passes a `Vec<u8>` and checks what was written.
+		- CLI tests in `tests/cli.rs` run the built binary with [assert_cmd](https://docs.rs/assert_cmd).
+		- [insta](https://insta.rs) is included so snapshot tests are easy to add later. Today it backs only the small inline snapshots in the command tests. It earns its place on large outputs such as help text, JSON, or rendered files. When output changes on purpose, run `cargo insta review` to accept the new snapshot instead of editing the expected text by hand.
+		
+		### Adding a command
+		
+		```sh
+		scaffold new command
+		```
+		
+		This generates `src/commands/<name>.rs` and registers the command in `src/cli.rs`, `src/commands.rs` and `src/main.rs`.
+		
+		### Releases
+		
+		Run the **Build and Publish** workflow from the Actions tab and pick a semver bump. It tags the release and runs GoReleaser, which cross-compiles with [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild). Releases build on Linux. The macOS binaries link against zig's bundled macOS stubs, which covers pure-Rust code; a dependency that links Apple frameworks needs a macOS SDK (set `SDKROOT`).
+		
+		`mise run build` builds a release binary for this machine into `dist/`.
+		
+	_typos.toml:  (type=file)
+		[files]
+		extend-exclude = ["target", "dist"]
+		
+	clippy.toml:  (type=file)
+		# Tests may unwrap, panic, index and print: a failing test should fail loudly.
+		allow-dbg-in-tests = false
+		allow-expect-in-tests = true
+		allow-indexing-slicing-in-tests = true
+		allow-panic-in-tests = true
+		allow-print-in-tests = true
+		allow-unwrap-in-tests = true
+		
+		avoid-breaking-exported-api = false
+		cognitive-complexity-threshold = 15
+		too-many-arguments-threshold = 5
+		too-many-lines-threshold = 80
+		
+		disallowed-methods = [
+		  { path = "std::process::exit", reason = "return an ExitCode from main so destructors run" },
+		  { path = "std::env::set_var", reason = "process-wide mutation; pass configuration explicitly" },
+		  { path = "std::env::remove_var", reason = "process-wide mutation; pass configuration explicitly" },
+		]
+		
+	deny.toml:  (type=file)
+		# cargo-deny checks dependencies for security advisories, licenses, banned
+		# crates and unknown sources. Run with `mise run deny`.
+		
+		[graph]
+		all-features = true
+		
+		[advisories]
+		version = 2
+		yanked = "deny"
+		
+		[licenses]
+		version = 2
+		confidence-threshold = 0.9
+		allow = [
+		  "Apache-2.0",
+		  "Apache-2.0 WITH LLVM-exception",
+		  "BSD-2-Clause",
+		  "BSD-3-Clause",
+		  "ISC",
+		  "MIT",
+		  "Unicode-3.0",
+		  "Zlib",
+		]
+		
+		# This crate sets `publish = false`, so its own license is not checked here.
+		[licenses.private]
+		ignore = true
+		
+		[bans]
+		multiple-versions = "warn"
+		wildcards = "deny"
+		allow-wildcard-paths = true
+		
+		[sources]
+		unknown-registry = "deny"
+		unknown-git = "deny"
+		allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+		
+	mise.toml:  (type=file)
+		# Rust itself comes from rustup, pinned by rust-toolchain.toml.
+		[tools]
+		cargo-deny = "latest"
+		"github:Boshen/cargo-shear" = "latest"
+		"github:rust-cross/cargo-zigbuild" = "latest"
+		"github:taiki-e/cargo-llvm-cov" = "latest"
+		cargo-insta = "latest"
+		goreleaser = "latest"
+		typos = "latest"
+		zig = "0.14"
+		
+		[env]
+		LOG_LEVEL = "debug"
+		
+		[tasks.run]
+		description = "Run the main application"
+		run = "cargo run --"
+		
+		[tasks.build]
+		description = "Build a release binary for this machine with goreleaser"
+		run = "goreleaser build --snapshot --clean --single-target"
+		
+		[tasks.test]
+		description = "Run all tests"
+		run = "cargo test --locked"
+		
+		[tasks.coverage]
+		description = "Run tests with coverage and write lcov.info"
+		run = "cargo llvm-cov --locked --lcov --output-path lcov.info"
+		
+		[tasks.fmt]
+		description = "Format code"
+		run = "cargo fmt --all"
+		
+		[tasks."fmt:check"]
+		description = "Check formatting"
+		run = "cargo fmt --all --check"
+		
+		[tasks.lint]
+		description = "Run clippy with warnings as errors"
+		run = "cargo clippy --locked --all-targets -- -D warnings"
+		
+		[tasks.docs]
+		description = "Build docs with warnings as errors"
+		run = "cargo doc --locked --no-deps --document-private-items"
+		env = { RUSTDOCFLAGS = "-D warnings" }
+		
+		[tasks.deny]
+		description = "Check dependencies for advisories, licenses and sources"
+		run = "cargo deny --locked check"
+		
+		[tasks.tidy]
+		description = "Find unused dependencies"
+		run = "cargo shear"
+		
+		[tasks.typos]
+		description = "Check spelling"
+		run = "typos"
+		
+		[tasks.check]
+		description = "Run all checks for PRs (fmt, lint, test, docs, deny, tidy, typos)"
+		run = [
+		    { task = "fmt:check" },
+		    { task = "lint" },
+		    { task = "test" },
+		    { task = "docs" },
+		    { task = "deny" },
+		    { task = "tidy" },
+		    { task = "typos" },
+		]
+		
+	renovate.json:  (type=file)
+		{
+		  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+		  "extends": ["config:recommended"],
+		  "lockFileMaintenance": {
+		    "enabled": true
+		  },
+		  "packageRules": [
+		    {
+		      "matchManagers": ["cargo"],
+		      "rangeStrategy": "bump"
+		    }
+		  ]
+		}
+		
+	rust-toolchain.toml:  (type=file)
+		[toolchain]
+		channel = "1.100"
+		components = ["clippy", "rustfmt", "llvm-tools"]
+		profile = "minimal"
+		
+	rustfmt.toml:  (type=file)
+		edition = "2024"
+		style_edition = "2024"
+		max_width = 100
+		newline_style = "Unix"
+		use_small_heuristics = "Max"
+		use_field_init_shorthand = true
+		use_try_shorthand = true
+		
+	src:  (type=dir)
+		build_info.rs:  (type=file)
+			//! Build metadata. The release build sets the `BUILD_*` variables at compile
+			//! time; local builds fall back to the crate version.
+			
+			/// The release version, e.g. `1.2.3`.
+			pub(crate) const VERSION: &str = match option_env!("BUILD_VERSION") {
+			    Some(version) => version,
+			    None => env!("CARGO_PKG_VERSION"),
+			};
+			
+			const COMMIT: &str = match option_env!("BUILD_COMMIT") {
+			    Some(commit) => commit,
+			    None => "HEAD",
+			};
+			
+			const DATE: &str = match option_env!("BUILD_DATE") {
+			    Some(date) => date,
+			    None => "now",
+			};
+			
+			/// The `--version` text: version, short commit and build date.
+			pub(crate) fn long_version() -> String {
+			    let short_commit = COMMIT.get(..7).unwrap_or(COMMIT);
+			    format!("{VERSION} ({short_commit}) {DATE}")
+			}
+			
+			#[cfg(test)]
+			mod tests {
+			    use super::*;
+			
+			    #[test]
+			    fn long_version_starts_with_version() {
+			        assert!(
+			            long_version().starts_with(VERSION),
+			            "long version should lead with the release version"
+			        );
+			    }
+			}
+			
+		cli.rs:  (type=file)
+			//! Command-line interface definition.
+			
+			use clap::{Args, Parser, Subcommand, ValueEnum};
+			use tracing_subscriber::filter::LevelFilter;
+			
+			use crate::{build_info, commands};
+			
+			#[derive(Debug, Parser)]
+			#[command(name = "cli-test", version = build_info::VERSION, about, long_about = None)]
+			pub(crate) struct Cli {
+			    #[command(flatten)]
+			    pub(crate) global: GlobalArgs,
+			
+			    #[command(subcommand)]
+			    pub(crate) command: Command,
+			}
+			
+			/// Flags shared by every command.
+			#[derive(Debug, Args)]
+			pub(crate) struct GlobalArgs {
+			    /// Log level
+			    #[arg(long, env = "LOG_LEVEL", value_enum, global = true)]
+			    pub(crate) log_level: Option<LogLevel>,
+			
+			    /// Disable colored output
+			    #[arg(long, env = "NO_COLOR", global = true)]
+			    pub(crate) no_color: bool,
+			}
+			
+			#[derive(Debug, Subcommand)]
+			pub(crate) enum Command {
+			    /// Run the hello command
+			    Hello(commands::hello::Args),
+			    /// Run the say-goodbye command
+			    SayGoodbye(commands::say_goodbye::Args),
+			    // +scaffold:command:variant
+			    /// Print a shell completion script
+			    Completions(commands::completions::Args),
+			}
+			#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, ValueEnum)]
+			pub(crate) enum LogLevel {
+			    Trace,
+			    Debug,
+			    #[default]
+			    Info,
+			    Warn,
+			    Error,
+			}
+			
+			impl From<LogLevel> for LevelFilter {
+			    fn from(level: LogLevel) -> Self {
+			        match level {
+			            LogLevel::Trace => Self::TRACE,
+			            LogLevel::Debug => Self::DEBUG,
+			            LogLevel::Info => Self::INFO,
+			            LogLevel::Warn => Self::WARN,
+			            LogLevel::Error => Self::ERROR,
+			        }
+			    }
+			}
+			
+			#[cfg(test)]
+			mod tests {
+			    use clap::CommandFactory as _;
+			
+			    use super::*;
+			
+			    #[test]
+			    fn cli_definition_is_valid() {
+			        Cli::command().debug_assert();
+			    }
+			}
+			
+		commands:  (type=dir)
+			completions.rs:  (type=file)
+				//! The `completions` command.
+				
+				use std::io::Write;
+				
+				use clap::CommandFactory as _;
+				use clap_complete::Shell;
+				
+				use crate::cli::Cli;
+				
+				#[derive(Debug, clap::Args)]
+				pub(crate) struct Args {
+				    /// Shell to generate completions for
+				    shell: Shell,
+				}
+				
+				pub(crate) fn run(args: &Args, out: &mut impl Write) {
+				    let mut command = Cli::command();
+				    let name = command.get_name().to_owned();
+				    clap_complete::generate(args.shell, &mut command, name, out);
+				}
+				
+			hello.rs:  (type=file)
+				//! The `hello` command.
+				
+				use std::io::Write;
+				
+				use super::Context;
+				
+				#[derive(Debug, clap::Args)]
+				pub(crate) struct Args;
+				
+				pub(crate) fn run(_args: &Args, _ctx: &Context, out: &mut impl Write) -> anyhow::Result<()> {
+				    tracing::info!("running hello command");
+				
+				    writeln!(out, "Hello World!")?;
+				    Ok(())
+				}
+				
+				#[cfg(test)]
+				mod tests {
+				    use super::*;
+				
+				    #[test]
+				    fn prints_greeting() {
+				        let mut out = Vec::new();
+				        run(&Args, &Context::default(), &mut out).unwrap();
+				        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @"Hello World!");
+				    }
+				}
+				
+			say_goodbye.rs:  (type=file)
+				//! The `say-goodbye` command.
+				
+				use std::io::Write;
+				
+				use super::Context;
+				
+				#[derive(Debug, clap::Args)]
+				pub(crate) struct Args;
+				
+				pub(crate) fn run(_args: &Args, _ctx: &Context, out: &mut impl Write) -> anyhow::Result<()> {
+				    tracing::info!("running say-goodbye command");
+				
+				    writeln!(out, "Hello World!")?;
+				    Ok(())
+				}
+				
+				#[cfg(test)]
+				mod tests {
+				    use super::*;
+				
+				    #[test]
+				    fn prints_greeting() {
+				        let mut out = Vec::new();
+				        run(&Args, &Context::default(), &mut out).unwrap();
+				        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @"Hello World!");
+				    }
+				}
+				
+		commands.rs:  (type=file)
+			//! Subcommand implementations. Each command writes its output to the writer
+			//! it is given, so tests can capture it.
+			
+			pub(crate) mod completions;
+			pub(crate) mod hello;
+			pub(crate) mod say_goodbye;
+			// +scaffold:command:module
+			
+			/// Settings that shape how every command writes output.
+			#[derive(Debug, Default)]
+			#[expect(
+			    clippy::empty_structs_with_brackets,
+			    reason = "commands build it with `Context::default()`, which keeps working once fields exist"
+			)]
+			pub(crate) struct Context {}
+			
+		logging.rs:  (type=file)
+			//! Tracing setup. Logs go to stderr so stdout stays free for command output.
+			
+			use anyhow::Context as _;
+			use tracing_subscriber::filter::LevelFilter;
+			use tracing_subscriber::fmt;
+			use tracing_subscriber::prelude::*;
+			
+			use crate::cli::LogLevel;
+			
+			/// Installs the global subscriber, logging to stderr.
+			pub(crate) fn init(level: LogLevel, color: bool) -> anyhow::Result<()> {
+			    tracing_subscriber::registry()
+			        .with(LevelFilter::from(level))
+			        .with(fmt::layer().with_writer(std::io::stderr).with_ansi(color))
+			        .try_init()
+			        .context("installing the tracing subscriber")
+			}
+			
+		main.rs:  (type=file)
+			//! A new project
+			
+			mod build_info;
+			mod cli;
+			mod commands;
+			mod logging;
+			
+			use std::io::{self, IsTerminal as _};
+			use std::process::ExitCode;
+			
+			use clap::{CommandFactory as _, FromArgMatches as _};
+			
+			use crate::cli::{Cli, Command};
+			
+			fn main() -> ExitCode {
+			    let matches = Cli::command().long_version(build_info::long_version()).get_matches();
+			    let cli = match Cli::from_arg_matches(&matches) {
+			        Ok(cli) => cli,
+			        Err(err) => err.exit(),
+			    };
+			
+			    let color = !cli.global.no_color && io::stderr().is_terminal();
+			    match run(cli) {
+			        Ok(()) => ExitCode::SUCCESS,
+			        Err(err) => {
+			            report(&err, color);
+			            ExitCode::FAILURE
+			        }
+			    }
+			}
+			
+			fn run(cli: Cli) -> anyhow::Result<()> {
+			    let log_level = cli.global.log_level.unwrap_or_default();
+			    logging::init(log_level, !cli.global.no_color)?;
+			    let ctx = commands::Context::default();
+			    let mut out = io::stdout().lock();
+			
+			    match cli.command {
+			        Command::Hello(args) => commands::hello::run(&args, &ctx, &mut out),
+			        Command::SayGoodbye(args) => commands::say_goodbye::run(&args, &ctx, &mut out),
+			        // +scaffold:command:dispatch
+			        Command::Completions(args) => {
+			            commands::completions::run(&args, &mut out);
+			            Ok(())
+			        }
+			    }
+			}
+			
+			/// Writes `err` and its causes to stderr in a box, colored when `color` is set.
+			fn report(err: &anyhow::Error, color: bool) {
+			    // Nothing useful remains to do if stderr itself is gone.
+			    let _ignored = write_report(&mut io::stderr().lock(), err, color);
+			}
+			
+			fn write_report(out: &mut impl io::Write, err: &anyhow::Error, color: bool) -> io::Result<()> {
+			    let (red, gray, reset) = if color {
+			        ("\x1b[38;2;215;95;107m", "\x1b[38;2;163;163;163m", "\x1b[0m")
+			    } else {
+			        ("", "", "")
+			    };
+			
+			    writeln!(out, "\n{red}╭ Error{reset}")?;
+			    for line in format!("{err:#}").lines() {
+			        writeln!(out, "{red}│{reset} {gray}{line}{reset}")?;
+			    }
+			    writeln!(out, "{red}╵{reset}")
+			}
+			
+			#[cfg(test)]
+			mod tests {
+			    use super::*;
+			
+			    #[test]
+			    fn report_boxes_every_line_of_the_error() {
+			        let err = anyhow::anyhow!("first line\nsecond line").context("loading config");
+			        let mut out = Vec::new();
+			        write_report(&mut out, &err, false).unwrap();
+			        insta::assert_snapshot!(String::from_utf8(out).unwrap(), @r"
+			        ╭ Error
+			        │ loading config: first line
+			        │ second line
+			        ╵
+			        ");
+			    }
+			}
+			
+	tests:  (type=dir)
+		cli.rs:  (type=file)
+			//! End-to-end tests that run the compiled binary.
+			
+			#[cfg(test)]
+			mod cli {
+			    use assert_cmd::Command;
+			    use predicates::str::contains;
+			
+			    fn bin() -> Command {
+			        Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap()
+			    }
+			
+			    #[test]
+			    fn help_lists_commands() {
+			        bin()
+			            .arg("--help")
+			            .assert()
+			            .success()
+			            .stdout(contains("hello"))
+			            .stdout(contains("say-goodbye"))
+			            .stdout(contains("completions"));
+			    }
+			
+			    #[test]
+			    fn version_prints_crate_version() {
+			        bin().arg("--version").assert().success().stdout(contains(env!("CARGO_PKG_VERSION")));
+			    }
+			
+			    #[test]
+			    fn hello_prints_greeting() {
+			        bin().args(["--no-color", "hello"]).assert().success().stdout("Hello World!\n");
+			    }
+			
+			    #[test]
+			    fn say_goodbye_prints_greeting() {
+			        bin().args(["--no-color", "say-goodbye"]).assert().success().stdout("Hello World!\n");
+			    }
+			
+			    #[test]
+			    fn unknown_command_fails() {
+			        bin().arg("not-a-command").assert().failure();
+			    }
+			
+			    #[test]
+			    fn completions_generates_a_script() {
+			        bin().args(["completions", "bash"]).assert().success().stdout(contains("cli-test"));
+			    }
+			}
+			
+

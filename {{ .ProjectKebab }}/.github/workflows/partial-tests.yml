@@ -1,0 +1,19 @@
+name: Rust Build/Test
+
+on:
+  workflow_call:
+
+jobs:
+  Rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tools
+        uses: jdx/mise-action@v5
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check
+        run: mise run check

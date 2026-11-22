@@ -1,0 +1,41 @@
+name: Update Template Dependencies
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 9am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tools
+        uses: jdx/mise-action@v5
+
+      - name: Update crate and Rust versions
+        run: mise run update:deps
+
+      - name: Update GitHub Action versions
+        run: mise run update:actions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update snapshot
+        run: mise run test:snapshot:update
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: chore/update-template-deps
+          title: "chore: update template dependencies"
+          commit-message: "chore: update template dependencies"
+          body: |
+            This PR updates the template to the latest crate majors, Rust stable, and GitHub Action majors.
+            The PR workflow renders each preset and runs its full checks.
+          delete-branch: true

@@ -1,0 +1,125 @@
+[package]
+name = "{{ .ProjectKebab }}"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+description = "{{ .Scaffold.description }}"
+authors = ["{{ .Scaffold.full_name }}"]
+{{- if eq .Scaffold.open_source_license "MIT license" }}
+license = "MIT"
+{{- else if eq .Scaffold.open_source_license "BSD license" }}
+license = "BSD-3-Clause"
+{{- else if eq .Scaffold.open_source_license "ISC license" }}
+license = "ISC"
+{{- else if eq .Scaffold.open_source_license "Apache Software License 2.0" }}
+license = "Apache-2.0"
+{{- else if eq .Scaffold.open_source_license "GNU General Public License v3" }}
+license = "GPL-3.0-only"
+{{- end }}
+repository = "https://{{ .Scaffold.repository }}"
+readme = "README.md"
+keywords = ["cli"]
+categories = ["command-line-utilities"]
+# Releases ship as binaries through GoReleaser, not through crates.io.
+publish = false
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env", "string", "wrap_help"] }
+clap_complete = "4"
+{{- if .Computed.feature_paths }}
+etcetera = "0.11"
+{{- end }}
+{{- if or .Computed.feature_config_file .Computed.feature_json_output }}
+serde = { version = "1", features = ["derive"] }
+{{- end }}
+{{- if .Computed.feature_config_file }}
+serde-saphyr = "2"
+{{- end }}
+{{- if .Computed.feature_json_output }}
+serde_json = "1"
+{{- end }}
+tracing = "0.1"
+{{- if .Computed.feature_file_logging }}
+tracing-appender = "0.2"
+{{- end }}
+tracing-subscriber = "0.3"
+
+[dev-dependencies]
+assert_cmd = "2"
+insta = "1"
+predicates = "3"
+{{- if .Computed.feature_config_file }}
+tempfile = "3"
+{{- end }}
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = true
+
+# The lint set is strict on purpose: it keeps generated and hand-written code
+# to the same bar. Silence a lint at the use site with
+# `#[expect(clippy::name, reason = "...")]`, never with a blanket allow here.
+[lints.rust]
+unsafe_code = "forbid"
+let_underscore_drop = "warn"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+cargo = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+# Transitive dependencies often pull two versions of one crate; cargo-deny
+# reports duplicates instead.
+multiple_crate_versions = "allow"
+# Conflicts with rustc's `unreachable_pub`, which this crate keeps instead.
+redundant_pub_crate = "allow"
+
+# Selected restriction lints.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+as_conversions = "warn"
+clone_on_ref_ptr = "warn"
+create_dir = "warn"
+dbg_macro = "warn"
+empty_structs_with_brackets = "warn"
+exit = "warn"
+expect_used = "warn"
+filetype_is_file = "warn"
+format_push_string = "warn"
+get_unwrap = "warn"
+if_then_some_else_none = "warn"
+indexing_slicing = "warn"
+infinite_loop = "warn"
+let_underscore_must_use = "warn"
+lossy_float_literal = "warn"
+mem_forget = "warn"
+missing_assert_message = "warn"
+mod_module_files = "warn"
+panic = "warn"
+print_stderr = "warn"
+print_stdout = "warn"
+rc_buffer = "warn"
+redundant_type_annotations = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+same_name_method = "warn"
+shadow_unrelated = "warn"
+str_to_string = "warn"
+string_add = "warn"
+string_slice = "warn"
+tests_outside_test_module = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+unimplemented = "warn"
+unneeded_field_pattern = "warn"
+unused_result_ok = "warn"
+unwrap_in_result = "warn"
+unwrap_used = "warn"
+verbose_file_reads = "warn"
+wildcard_enum_match_arm = "warn"
